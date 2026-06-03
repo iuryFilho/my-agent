@@ -1,141 +1,104 @@
-import requests
-import json
-from pathlib import Path
+import getpass
+
 from rich.console import Console
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any
+from typing import Annotated
 from datetime import datetime
+from pathlib import Path
 
-
-class CommandAction(Enum):
-    CONTINUE = 1
-    EXIT = 2
-
-
-@dataclass
-class Agent:
-    model: str = "qwen/qwen3-vl-4b"
-    base_url: str = "http://localhost:1234/v1"
-    api_url: str = "http://localhost:1234/api/v1"
-    api_key: str = field(default="NO_API_KEY", repr=False)
-    messages: list[dict[str, Any]] = field(default_factory=list)
-
-    def __post_init__(self):
-        self.base_url = self.base_url.rstrip("/")
-
-    def chat(self, user_message: str) -> str:
-        self.messages.append({"role": "user", "content": user_message})
-
-        url = f"{self.base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        r = requests.post(
-            url,
-            headers=headers,
-            json={"model": self.model, "messages": self.messages},
-            timeout=300,
-        )
-        r.raise_for_status()
-        data = r.json()
-        choices = data.get("choices")
-
-        if not choices:
-            raise RuntimeError("Model response missing choices")
-
-        message = choices[0].get("message")
-        if message is None:
-            raise RuntimeError("Model response missing message")
-
-        response = message.get("content") or ""
-        self.messages.append({"role": "assistant", "content": response})
-        return response
-
-    def unload_model(self):
-        url = f"{self.api_url}/models/unload"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        data = {"instance_id": self.model}
-        r = requests.post(url, headers=headers, json=data, timeout=30)
-        r.raise_for_status()
-        return r.json()
-
-
-def commands_handler(
-    command: str, command_args: list[str], agent: Agent, console: Console
-) -> CommandAction:
-    match command:
-        case "/help":
-            console.print(
-                "/help - Show this help message\n"
-                "/clear - Clear conversation history\n"
-                "/export [json|txt] - Export conversation to file\n"
-                "/exit or /quit - Exit the program",
-            )
-            return CommandAction.CONTINUE
-
-        case "/clear":
-            agent.messages.clear()
-            console.print("[dim]Conversation history cleared.[/dim]")
-            return CommandAction.CONTINUE
-
-        case "/unload":
-            agent.unload_model()
-            console.print("[dim]Model unloaded.[/dim]")
-            return CommandAction.CONTINUE
-
-        case "/export":
-            if len(command_args) == 1:
-                file_type = command_args[0].strip()
-            else:
-                console.print("Enter file type (txt, json): ", end="")
-                file_type = console.input().strip().lower()
-
-            with console.status("[dim]Exporting conversation...[/dim]", spinner="arc"):
-                output_dir = Path("output")
-                output_dir.mkdir(exist_ok=True)
-                basename = f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-                if file_type == "json":
-                    with open(
-                        output_dir / f"{basename}.json", "w", encoding="utf-8"
-                    ) as f:
-                        json.dump(agent.messages, f, indent=2)
-                else:
-                    with open(
-                        output_dir / f"{basename}.txt", "w", encoding="utf-8"
-                    ) as f:
-                        for msg in agent.messages:
-                            role = msg["role"].capitalize()
-                            content = msg["content"]
-                            f.write(f"{role}: {content}\n")
-
-            console.print(f"[dim]Conversation exported to {basename}.{file_type}[/dim]")
-            return CommandAction.CONTINUE
-
-        case "/exit" | "/quit":
-            console.print("[dim]Goodbye![/dim]")
-            return CommandAction.EXIT
-
-        case _:
-            console.print(
-                "[red]Unknown command. Type /help for a list of commands.[/red]"
-            )
-            return CommandAction.CONTINUE
+from utils.agent import Agent
+from utils.utils import commands_handler, CommandAction
 
 
 def main():
     agent = Agent()
     console = Console()
 
+    files_dir = Path("files")
+
+    @agent.context
+    def user_context() -> str:
+        return (
+            f"Current date and time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n"
+            f"Current user: {getpass.getuser()}\n"
+            f"Current working directory: {Path.cwd()}"
+        )
+
+    @agent.tool
+    def add(
+        a: Annotated[int, "First number"],
+        b: Annotated[int, "Second number"],
+    ) -> int:
+        """Add two numbers together."""
+        return a + b
+
+    @agent.tool
+    def multiply(
+        a: Annotated[int, "First number"],
+        b: Annotated[int, "Second number"],
+    ) -> int:
+        """Multiply two numbers together."""
+        return a * b
+
+    @agent.tool
+    def get_files() -> list[str]:
+        """Get a list of files in the 'files' directory."""
+        if not files_dir.exists():
+            try:
+                files_dir.mkdir()
+            except Exception as e:
+                return [f"Error creating directory: {str(e)}"]
+
+        try:
+            return [str(f) for f in files_dir.rglob("*")]
+        except Exception as e:
+            return [f"Error listing directory: {str(e)}"]
+
+    @agent.tool
+    def read_file(
+        file_path: Annotated[str, "The path of the file to read"],
+    ) -> str:
+        """Read the content of a file in the 'files' directory."""
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception as e:
+            return f"Error reading file: {str(e)}"
+
+    @agent.tool
+    def write_file(
+        file_path: Annotated[str, "The relative path of the file to write"],
+        content: Annotated[str, "The content to write to the file"],
+    ) -> str:
+        """Write content to a file in the 'files' directory."""
+        file_path = Path(file_path.strip())
+        if file_path.is_absolute():
+            return (
+                "Error: file_path must be a relative path within the 'files' directory."
+            )
+        full_path = files_dir / file_path
+
+        try:
+            if not full_path.parent.exists():
+                full_path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            return f"Error creating directory: {str(e)}"
+
+        try:
+            with open(full_path, "w", encoding="utf-8") as f:
+                f.write(content)
+            return f"File '{full_path}' written successfully."
+        except Exception as e:
+            return f"Error writing file: {str(e)}"
+
     while True:
         console.print("[green]You:[/green] ", end="")
-        user_input = console.input().strip()
+
+        try:
+            user_input = console.input().strip()
+        except KeyboardInterrupt, EOFError:
+            console.print("\n[dim]Exiting...[/dim]")
+            break
+
         if user_input[0] == "/":
             command, *args = user_input.lower().split()
             match commands_handler(command, args, agent, console):
@@ -144,8 +107,8 @@ def main():
                 case CommandAction.EXIT:
                     exit(0)
 
-        with console.status("[dim]Thinking...[/dim]", spinner="arc"):
-            response = agent.chat(user_input)
+        with console.status("[dim]Thinking...[/dim]", spinner="arc") as status:
+            response = agent.chat(user_input, status)
 
         console.print(f"[blue]Assistant:[/blue] {response}")
 

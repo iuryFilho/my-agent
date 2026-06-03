@@ -12,5 +12,6 @@ wheels/
 # Lock files
 uv.lock
 
-# Output directory
-output/
+# Temporary directories
+exports/
+files/
