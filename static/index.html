@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent - Premium Web Interface</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Marked Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i data-lucide="cpu" class="logo-icon"></i>
+                    <span>MyAgent</span>
+                </div>
+            </div>
+
+            <!-- Agent Status Section -->
+            <div class="sidebar-section">
+                <div class="section-header-row">
+                    <h3 class="section-title">
+                        <i data-lucide="info"></i> Status do Agente
+                    </h3>
+                    <button class="toggle-section-btn icon-btn" title="Minimizar/Expandir">
+                        <i data-lucide="chevron-down" class="small-icon toggle-icon"></i>
+                    </button>
+                </div>
+                <div class="section-content">
+                    <div class="status-card">
+                        <div class="status-item">
+                            <span class="label">Modelo:</span>
+                            <span id="agent-model" class="value">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Provedor:</span>
+                            <span id="agent-provider" class="value">Carregando...</span>
+                        </div>
+                        <div class="status-item">
+                            <span class="label">Mensagens:</span>
+                            <span id="agent-msg-count" class="value">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools Section -->
+            <div class="sidebar-section collapsed">
+                <div class="section-header-row">
+                    <h3 class="section-title">
+                        <i data-lucide="wrench"></i> Ferramentas Ativas
+                    </h3>
+                    <button class="toggle-section-btn icon-btn" title="Minimizar/Expandir">
+                        <i data-lucide="chevron-down" class="small-icon toggle-icon"></i>
+                    </button>
+                </div>
+                <div class="section-content">
+                    <div id="tools-list" class="tools-list">
+                        <!-- Dinamicamente preenchido -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Files Section -->
+            <div class="sidebar-section files-section">
+                <div class="section-header-row">
+                    <h3 class="section-title">
+                        <i data-lucide="folder-open"></i> Pasta Workspace
+                    </h3>
+                    <div class="section-header-actions">
+                        <button id="refresh-files-btn" class="icon-btn" title="Atualizar workspace">
+                            <i data-lucide="refresh-cw" class="small-icon"></i>
+                        </button>
+                        <button class="toggle-section-btn icon-btn" title="Minimizar/Expandir">
+                            <i data-lucide="chevron-down" class="small-icon toggle-icon"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="section-content">
+                    <div id="files-list" class="files-list">
+                        <!-- Dinamicamente preenchido -->
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="chat-area">
+            <header class="chat-header">
+                <div class="chat-header-title">
+                    <h2>Conversa Ativa</h2>
+                    <span class="status-indicator"></span>
+                </div>
+                <div class="header-actions">
+                    <button id="clear-chat-btn" class="action-btn header-btn">
+                        <i data-lucide="trash-2"></i> Limpar Chat
+                    </button>
+                </div>
+            </header>
+
+            <!-- Chat History -->
+            <div id="chat-messages" class="chat-messages">
+                <div class="system-welcome">
+                    <i data-lucide="bot" class="welcome-icon"></i>
+                    <h1>Olá, eu sou o seu Assistente de IA</h1>
+                    <p>Fale comigo no chat ou execute comandos do sistema usando `/`. Minhas ferramentas integradas estão expostas na barra lateral e refletem alterações no seu workspace.</p>
+                </div>
+                <!-- Mensagens dinâmicas aparecem aqui -->
+            </div>
+
+            <!-- Thinking Indicator -->
+            <div id="thinking-indicator" class="thinking-wrapper hidden">
+                <div class="thinking-bubble">
+                    <div class="agent-avatar-small">
+                        <i data-lucide="bot"></i>
+                    </div>
+                    <div class="thinking-content">
+                        <span id="thinking-text">Pensando</span>
+                        <div class="typing-animation">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input Area -->
+            <footer class="chat-footer">
+                <form id="chat-form" class="chat-input-container">
+                    <div id="autocomplete-dropdown" class="autocomplete-dropdown hidden"></div>
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        placeholder="Digite sua mensagem ou um comando (ex: /help, /export json)..." 
+                        autocomplete="off"
+                        required
+                    />
+                    <button type="submit" class="send-btn" id="send-btn">
+                        <i data-lucide="send"></i>
+                    </button>
+                </form>
+            </footer>
+        </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

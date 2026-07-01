@@ -1,6 +1,5 @@
 import inspect
 import json
-
 from dataclasses import dataclass, field
 from typing import Callable, Any, Annotated, Union, Final, get_origin, get_args
 
@@ -50,8 +49,8 @@ class Tools:
 
         return schema
 
-    @classmethod
-    def schema_to_callable(cls, func: Callable[..., Any]) -> dict[str, Any]:
+    @staticmethod
+    def _schema_to_callable(func: Callable[..., Any]) -> dict[str, Any]:
         sig = inspect.signature(func)
         annotations = inspect.get_annotations(func)
 
@@ -68,7 +67,7 @@ class Tools:
             if annotation is inspect.Parameter.empty:
                 continue
 
-            parameters["properties"][name] = cls._annotation_to_schema(annotation)
+            parameters["properties"][name] = Tools._annotation_to_schema(annotation)
 
             if param.default is inspect.Parameter.empty:
                 parameters["required"].append(name)
@@ -93,7 +92,7 @@ class Tools:
 
     def register(self, func: Callable[..., Any]) -> Callable[..., Any]:
         if getattr(func, self.TOOL_SCHEMA_ATTR, None) is None:
-            setattr(func, self.TOOL_SCHEMA_ATTR, self.schema_to_callable(func))
+            setattr(func, self.TOOL_SCHEMA_ATTR, self._schema_to_callable(func))
         self.tools[func.__name__] = func
         return func
 

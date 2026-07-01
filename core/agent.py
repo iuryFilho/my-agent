@@ -1,35 +1,37 @@
 import json
-import requests
-
 from dataclasses import dataclass, field
 from typing import Callable, Any
 from rich.status import Status
 
-from utils.tools import Tools
+from core.tools import Tools
+from core.providers import LLMProvider, OpenAICompatibleProvider
+
+BASE_URL = "http://localhost:1234/v1"
+BASE_API_URL = "http://localhost:1234/api/v1"
 
 
 @dataclass
 class Agent:
     system_prompt: str = "You are a helpful assistant."
     model: str = "qwen/qwen3-vl-4b"
-    base_url: str = "http://localhost:1234/v1"
-    base_api_url: str = "http://localhost:1234/api/v1"
-    api_key: str = field(default="NO_API_KEY", repr=False)
+    provider: LLMProvider = field(
+        default_factory=lambda: OpenAICompatibleProvider(BASE_URL, BASE_API_URL)
+    )
     tools: Tools = field(default_factory=Tools)
     contexts: dict[str, Callable[[], str]] = field(default_factory=dict)
     messages: list[dict[str, Any]] = field(default_factory=list)
 
-    def __post_init__(self):
-        self.base_url = self.base_url.rstrip("/")
-
     def tool(self, func: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorador para registrar uma ferramenta (tool) no agente."""
         return self.tools.register(func)
 
     def context(self, func: Callable[[], str]) -> Callable[[], str]:
+        """Decorador para registrar um contexto dinâmico no agente."""
         self.contexts[func.__name__] = func
         return func
 
     def chat(self, user_message: str, status: Status) -> str:
+        """Envia uma mensagem do usuário para o assistente e processa a resposta."""
         self.messages.append({"role": "user", "content": user_message})
 
         context_content = "\n\n".join(
@@ -37,32 +39,22 @@ class Agent:
             for n, fn in self.contexts.items()
         )
 
-        prefix: list[dict[str, any]] = [
+        prefix: list[dict[str, Any]] = [
             {"role": "system", "content": self.system_prompt},
             {"role": "system", "content": context_content},
         ]
 
         while True:
-            api_kwargs = {
-                "model": self.model,
-                "messages": prefix + self.messages,
-            }
-
             tool_schemas = self.tools.get_schemas()
-            if tool_schemas:
-                api_kwargs["tools"] = tool_schemas
 
-            url = f"{self.base_url}/chat/completions"
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
+            # Delega a geração da resposta do chat para o provedor de LLM injetado
+            data = self.provider.chat_completion(
+                model=self.model,
+                messages=prefix + self.messages,
+                tools=tool_schemas if tool_schemas else None,
+            )
 
-            r = requests.post(url, headers=headers, json=api_kwargs, timeout=300)
-            r.raise_for_status()
-            data = r.json()
             choices = data.get("choices")
-
             if not choices:
                 raise RuntimeError("Model response missing choices")
 
@@ -71,8 +63,8 @@ class Agent:
                 raise RuntimeError("Model response missing message")
 
             tool_calls = message.get("tool_calls", [])
-
             response = message.get("content") or ""
+
             self.messages.append(
                 {
                     "role": "assistant",
@@ -110,13 +102,50 @@ class Agent:
                     }
                 )
 
-    def unload_model(self):
-        url = f"{self.base_api_url}/models/unload"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+    def unload_model(self) -> dict[str, Any]:
+        """Descarrega o modelo atual do provedor configurado."""
+        try:
+            return self.provider.unload_model(self.model)
+        except ValueError as e:
+            return {"message": str(e)}
+
+
+class AgentBuilder:
+    """Implementação do Builder Pattern para facilitar a criação e configuração de instâncias do Agent."""
+
+    def __init__(self) -> None:
+        self._system_prompt: str = "You are a helpful assistant."
+        self._model: str = "qwen/qwen3-vl-4b"
+        self._provider: LLMProvider | None = None
+        self._tools: Tools | None = None
+
+    def with_system_prompt(self, prompt: str) -> "AgentBuilder":
+        self._system_prompt = prompt
+        return self
+
+    def with_model(self, model: str) -> "AgentBuilder":
+        self._model = model
+        return self
+
+    def with_provider(self, provider: LLMProvider) -> "AgentBuilder":
+        self._provider = provider
+        return self
+
+    def with_tools(self, tools: Tools) -> "AgentBuilder":
+        self._tools = tools
+        return self
+
+    def build(self) -> Agent:
+        provider = self._provider
+        if provider is None:
+            provider = OpenAICompatibleProvider(BASE_URL, BASE_API_URL)
+
+        agent_args: dict[str, Any] = {
+            "system_prompt": self._system_prompt,
+            "model": self._model,
+            "provider": provider,
         }
-        data = {"instance_id": self.model}
-        r = requests.post(url, headers=headers, json=data, timeout=30)
-        r.raise_for_status()
-        return r.json()
+        if self._tools is not None:
+            agent_args["tools"] = self._tools
+
+        return Agent(**agent_args)

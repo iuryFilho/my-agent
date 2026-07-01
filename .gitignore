@@ -13,5 +13,5 @@ wheels/
 uv.lock
 
 # Temporary directories
+workspace/
 exports/
-files/
