@@ -1,0 +1,9 @@
+# Configurações do MyAgent
+model: "qwen/qwen3-vl-4b"
+system_prompt: "You are a helpful assistant."
+
+provider:
+  name: "openai"
+  base_url: "http://localhost:1234/v1"
+  base_api_url: "http://localhost:1234/api/v1"
+  api_key: "NO_API_KEY"

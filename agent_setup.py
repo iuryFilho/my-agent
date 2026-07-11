@@ -3,12 +3,17 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated
 
-from core import AgentBuilder, Agent
+from core import AgentBuilder, Agent, Config
 
 
 def create_agent() -> Agent:
     """Configura e retorna uma instância do Agent pré-configurada com ferramentas e contexto."""
-    agent = AgentBuilder().build()
+    config_path = Path("agent.yaml")
+    if config_path.exists():
+        config = Config.from_yaml(config_path)
+        agent = config.build_agent()
+    else:
+        agent = AgentBuilder().build()
     workspace_dir = Path("workspace")
 
     @agent.context
